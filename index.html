@@ -232,12 +232,12 @@
       </div>
 
       <!-- BOTÓN DE FIJAR AVISO -->
-      <button class="btn btn-link" id="fixNoticeBtn">🔗 Fijar Aviso y Guardar URL</button>
+      <button class="btn btn-link" id="fixNoticeBtn">🔗 Fijar Aviso para Todos (Copiar Link)</button>
       <button class="btn btn-download" id="downloadBtn">📥 Descargar Publicidad (PNG)</button>
     </div>
   </div>
 
-  <div class="toast" id="toastMsg">¡Aviso fijado! Link copiado y guardado.</div>
+  <div class="toast" id="toastMsg">¡Link copiado! Este enlace funcionará en cualquier lado.</div>
 
   <script>
     const GITHUB_USER = 'ofispaciospaseo-del';
@@ -247,12 +247,25 @@
     const DEFAULT_PHONE   = '+54 9 223 555-1234';
     const DEFAULT_EMAIL   = 'contacto@estantesjet.com';
 
-    // Leer parámetros de la URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const selectedFotoParam = urlParams.get('foto');
-    const paramAddress = urlParams.get('dir') || DEFAULT_ADDRESS;
-    const paramPhone   = urlParams.get('tel') || DEFAULT_PHONE;
-    const paramEmail   = urlParams.get('mail') || DEFAULT_EMAIL;
+    // Leer los datos directamente desde el Hash (#) de la URL (GitHub nunca borra esto)
+    function getHashParams() {
+      const hash = window.location.hash.substring(1);
+      if (!hash) return {};
+      const params = {};
+      hash.split('&').forEach(part => {
+        const item = part.split('=');
+        if (item.length === 2) {
+          params[item[0]] = decodeURIComponent(item[1]);
+        }
+      });
+      return params;
+    }
+
+    const hashParams = getHashParams();
+    const activeFotoParam = hashParams.foto;
+    const paramAddress = hashParams.dir || DEFAULT_ADDRESS;
+    const paramPhone   = hashParams.tel || DEFAULT_PHONE;
+    const paramEmail   = hashParams.mail || DEFAULT_EMAIL;
 
     const canvas = document.getElementById('mainCanvas');
     const ctx = canvas.getContext('2d');
@@ -296,19 +309,15 @@
           statusMsg.textContent = `Total de imágenes cargadas: ${allImages.length}`;
           renderGrid();
 
-          if (selectedFotoParam) {
-            const match = allImages.find(img => img.name.toLowerCase() === selectedFotoParam.toLowerCase());
+          if (activeFotoParam) {
+            const match = allImages.find(img => img.name.toLowerCase() === activeFotoParam.toLowerCase());
             if (match) {
               baseImage.src = match.url;
             } else {
-              baseImage.src = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${selectedFotoParam}`;
+              baseImage.src = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${activeFotoParam}`;
             }
           } else if (allImages.length > 0) {
             baseImage.src = allImages[0].url;
-            setTimeout(() => {
-              const firstCard = imageGrid.querySelector('.grid-card');
-              if (firstCard) firstCard.classList.add('active');
-            }, 100);
           }
           return;
         }
@@ -338,15 +347,16 @@
           <p>${imgObj.name}</p>
         `;
         
+        const currentSelected = activeFotoParam || (allImages.length > 0 ? allImages[0].name : '');
+        if (imgObj.name.toLowerCase() === currentSelected.toLowerCase()) {
+          card.classList.add('active');
+        }
+
         card.addEventListener('click', () => {
           document.querySelectorAll('.grid-card').forEach(c => c.classList.remove('active'));
           card.classList.add('active');
           baseImage.src = imgObj.url;
         });
-
-        if (selectedFotoParam && imgObj.name.toLowerCase() === selectedFotoParam.toLowerCase()) {
-          card.classList.add('active');
-        }
 
         imageGrid.appendChild(card);
       });
@@ -463,7 +473,7 @@
       requestAnimationFrame(renderLoop);
     });
 
-    // SOLUCIÓN DEFINITIVA: Forzar la URL completa de GitHub Pages sin errores de rutas relativas
+    // FIJAR AVISO: Genera un enlace universal basado en el Hash (#) que GitHub no borra nunca
     fixNoticeBtn.addEventListener('click', () => {
       const activeCard = document.querySelector('.grid-card.active');
       let photoToFix = '';
@@ -474,18 +484,20 @@
         photoToFix = allImages[0].name;
       }
 
-      // Construimos de forma limpia la URL exacta para GitHub Pages
-      const cleanOrigin = window.location.origin;
-      const targetUrl = `${cleanOrigin}/${GITHUB_REPO}/?foto=${encodeURIComponent(photoToFix)}&dir=${encodeURIComponent(addressInput.value)}&tel=${encodeURIComponent(phoneInput.value)}&mail=${encodeURIComponent(emailInput.value)}`;
+      const hashData = `foto=${encodeURIComponent(photoToFix)}&dir=${encodeURIComponent(addressInput.value)}&tel=${encodeURIComponent(phoneInput.value)}&mail=${encodeURIComponent(emailInput.value)}`;
+      
+      // Actualizar la URL de la página con el hash sin recargarla
+      window.location.hash = hashData;
 
-      navigator.clipboard.writeText(targetUrl).then(() => {
+      const fullShareUrl = window.location.href;
+
+      navigator.clipboard.writeText(fullShareUrl).then(() => {
         toastMsg.style.display = 'block';
         setTimeout(() => {
           toastMsg.style.display = 'none';
-          window.location.href = targetUrl; // Recarga con la URL blindada
-        }, 1200);
+        }, 2500);
       }).catch(err => {
-        window.location.href = targetUrl;
+        alert('Enlace generado en la barra de direcciones.');
       });
     });
 
