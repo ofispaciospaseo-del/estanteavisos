@@ -237,7 +237,7 @@
     </div>
   </div>
 
-  <div class="toast" id="toastMsg">¡Aviso fijado! Link copiado al portapapeles.</div>
+  <div class="toast" id="toastMsg">¡Aviso fijado! Link copiado y actualizado.</div>
 
   <script>
     const GITHUB_USER = 'ofispaciospaseo-del';
@@ -247,7 +247,7 @@
     const DEFAULT_PHONE   = '+54 9 223 555-1234';
     const DEFAULT_EMAIL   = 'contacto@estantesjet.com';
 
-    // Leer parámetros de la URL de forma segura
+    // Leer parámetros actuales de la URL
     const urlParams = new URLSearchParams(window.location.search);
     const selectedFotoParam = urlParams.get('foto');
     const paramAddress = urlParams.get('dir') || DEFAULT_ADDRESS;
@@ -277,7 +277,6 @@
     let baseImage = new Image();
     let globalLogo = new Image();
     let uploadedLogo = null;
-    let currentActivePhoto = selectedFotoParam || '';
     let currentHash = generateHash();
 
     baseImage.crossOrigin = "anonymous";
@@ -297,24 +296,27 @@
           statusMsg.textContent = `Total de imágenes cargadas: ${allImages.length}`;
           renderGrid();
 
+          // Seleccionar imagen inicial según parámetro o la primera
           if (selectedFotoParam) {
             const match = allImages.find(img => img.name.toLowerCase() === selectedFotoParam.toLowerCase());
             if (match) {
               baseImage.src = match.url;
-              currentActivePhoto = match.name;
             } else {
               baseImage.src = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${selectedFotoParam}`;
-              currentActivePhoto = selectedFotoParam;
             }
           } else if (allImages.length > 0) {
             baseImage.src = allImages[0].url;
-            currentActivePhoto = allImages[0].name;
+            // Marcar la primera visualmente como activa en el DOM
+            setTimeout(() => {
+              const firstCard = imageGrid.querySelector('.grid-card');
+              if (firstCard) firstCard.classList.add('active');
+            }, 100);
           }
           return;
         }
-      } catch (e) {}
-
-      statusMsg.textContent = 'Cargando directorio...';
+      } catch (e) {
+        statusMsg.textContent = 'Error al conectar con GitHub.';
+      }
     }
 
     function renderGrid() {
@@ -331,20 +333,22 @@
       filtered.forEach((imgObj) => {
         const card = document.createElement('div');
         card.className = 'grid-card';
+        card.dataset.photoname = imgObj.name; // Guardamos el nombre exacto en el elemento HTML
+        
         card.innerHTML = `
           <img src="${imgObj.url}" alt="${imgObj.name}">
           <p>${imgObj.name}</p>
         `;
         
+        // Al hacer clic, cambiamos la imagen del canvas y actualizamos las clases visuales sin recargar de inmediato
         card.addEventListener('click', () => {
-          const baseUrl = window.location.href.split('?')[0];
-          const targetUrl = `${baseUrl}?foto=${encodeURIComponent(imgObj.name)}&dir=${encodeURIComponent(addressInput.value)}&tel=${encodeURIComponent(phoneInput.value)}&mail=${encodeURIComponent(emailInput.value)}`;
-          window.location.href = targetUrl;
+          document.querySelectorAll('.grid-card').forEach(c => c.classList.remove('active'));
+          card.classList.add('active');
+          baseImage.src = imgObj.url;
         });
 
-        if (currentActivePhoto && imgObj.name.toLowerCase() === currentActivePhoto.toLowerCase()) {
-          card.classList.add('active');
-        } else if (!currentActivePhoto && allImages.indexOf(imgObj) === 0) {
+        // Marcar como activa si coincide con la URL
+        if (selectedFotoParam && imgObj.name.toLowerCase() === selectedFotoParam.toLowerCase()) {
           card.classList.add('active');
         }
 
@@ -463,19 +467,29 @@
       requestAnimationFrame(renderLoop);
     });
 
-    // BOTÓN FIJAR AVISO CORREGIDO PARA GITHUB PAGES
+    // BOTÓN FIJAR AVISO BLINDADO: Lee directamente de la tarjeta activa en la interfaz
     fixNoticeBtn.addEventListener('click', () => {
+      const activeCard = document.querySelector('.grid-card.active');
+      let photoToFix = '';
+
+      if (activeCard) {
+        photoToFix = activeCard.dataset.photoname;
+      } else if (allImages.length > 0) {
+        photoToFix = allImages[0].name;
+      }
+
       const baseUrl = window.location.href.split('?')[0];
-      const photoToFix = currentActivePhoto || (allImages.length > 0 ? allImages[0].name : '');
-      
       const targetUrl = `${baseUrl}?foto=${encodeURIComponent(photoToFix)}&dir=${encodeURIComponent(addressInput.value)}&tel=${encodeURIComponent(phoneInput.value)}&mail=${encodeURIComponent(emailInput.value)}`;
 
       navigator.clipboard.writeText(targetUrl).then(() => {
         toastMsg.style.display = 'block';
         setTimeout(() => {
           toastMsg.style.display = 'none';
-          window.location.href = targetUrl;
+          window.location.href = targetUrl; // Recarga con la URL fija definitiva
         }, 1200);
+      }).catch(err => {
+        // Fallback por si el navegador bloquea el portapapeles
+        window.location.href = targetUrl;
       });
     });
 
